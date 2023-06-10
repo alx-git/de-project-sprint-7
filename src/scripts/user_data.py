@@ -79,17 +79,17 @@ def user_actual_address(messages_cities):
 
 def user_home_address(messages_cities):
     
-    window = Window().partitionBy(['event.message_from']).orderBy(F.desc('datetime_correct'))
-        
-    return messages_cities.withColumn("previous_city",F.lag("city", -1).over(window)).\
-    withColumn("next_city",F.lag("city", 1).over(window)).\
-    select('event.message_from','datetime_correct','city','previous_city','next_city').na.fill("na").\
+    window_first = Window().partitionBy(['event.message_from']).orderBy(F.desc('datetime_correct'))
+    window_second = Window().partitionBy(['message_from']).orderBy(F.desc('datetime_correct'))
+    
+    return messages_cities.withColumn("previous_city",F.lag("city", -1).over(window_first)).\
+    withColumn("next_city",F.lag("city", 1).over(window_first)).\
+    select('event.message_from',F.col('datetime_correct'),'city','previous_city','next_city').na.fill("na").\
     where("previous_city != next_city").\
-    withColumn("previous_datetime",F.lag("datetime_correct", -1).\
-    over(Window().partitionBy(['message_from']).orderBy(F.desc('datetime_correct')))).\
+    withColumn("previous_datetime",F.lag(F.col("datetime_correct"), -1).over(window_second)).\
     where("previous_city = city").\
-    withColumn('datetime_difference', F.datediff(F.to_timestamp(F.col("datetime_correct"),\
-    "yyyy-MM-dd HH:mm:ss"),F.to_timestamp(F.col("previous_datetime"), "yyyy-MM-dd HH:mm:ss"))).\
+    withColumn('datetime_difference', F.datediff(F.col("datetime_correct"),\
+    F.col("previous_datetime"))).\
     where("datetime_difference >= 27").\
     withColumn("max_datetime",F.max("datetime_correct").over(Window().partitionBy(['message_from']))).\
     where("datetime_correct = max_datetime").select('message_from', 'city').\
